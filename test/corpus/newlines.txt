@@ -1,0 +1,217 @@
+================================================================================
+Leading pipe continues the line
+================================================================================
+
+fn f() {
+  let total =
+    orders
+    |> list::filter(is_paid)
+    // a comment between pipeline steps
+    |> list::fold(0, add)
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (identifier)
+            (call_expression
+              (path_expression
+                (module)
+                (identifier))
+              (arguments
+                (identifier))))
+          (comment)
+          (call_expression
+            (path_expression
+              (module)
+              (identifier))
+            (arguments
+              (integer)
+              (identifier))))))))
+
+================================================================================
+Leading && and || continue the line
+================================================================================
+
+fn f() {
+  let ok = is_valid(order)
+    && has_stock(order)
+    || is_backorder(order)
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (binary_expression
+          (binary_expression
+            (call_expression
+              (identifier)
+              (arguments
+                (identifier)))
+            (call_expression
+              (identifier)
+              (arguments
+                (identifier))))
+          (call_expression
+            (identifier)
+            (arguments
+              (identifier))))))))
+
+================================================================================
+Leading minus starts a new statement
+================================================================================
+
+fn f() {
+  let a = b
+  -c
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (identifier))
+      (unary_expression
+        (identifier)))))
+
+================================================================================
+Trailing operator continues the line
+================================================================================
+
+fn f() {
+  let a = b +
+    c
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (binary_expression
+          (identifier)
+          (identifier))))))
+
+================================================================================
+Closing type argument ends the line
+================================================================================
+
+type Cell = Option<player::Player>
+type Grid = List<List<Cell>>
+
+fn index() -> map::Map<
+  String,
+  List<Int>,
+> {
+  map::new::<
+    String,
+    List<Int>,
+  >()
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (type_alias
+    (type_identifier)
+    (named_type
+      (type_identifier)
+      (type_arguments
+        (named_type
+          (module)
+          (type_identifier)))))
+  (type_alias
+    (type_identifier)
+    (named_type
+      (type_identifier)
+      (type_arguments
+        (named_type
+          (type_identifier)
+          (type_arguments
+            (named_type
+              (type_identifier)))))))
+  (function_declaration
+    (identifier)
+    (parameters)
+    (named_type
+      (module)
+      (type_identifier)
+      (type_arguments
+        (named_type
+          (type_identifier))
+        (named_type
+          (type_identifier)
+          (type_arguments
+            (named_type
+              (type_identifier))))))
+    (block
+      (call_expression
+        (path_expression
+          (module)
+          (identifier)
+          (turbofish
+            (named_type
+              (type_identifier))
+            (named_type
+              (type_identifier)
+              (type_arguments
+                (named_type
+                  (type_identifier))))))
+        (arguments)))))
+
+================================================================================
+Closure body inside call arguments
+================================================================================
+
+fn f() {
+  list::map(xs, fn(x) {
+    let y = x
+    y
+  })
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (call_expression
+        (path_expression
+          (module)
+          (identifier))
+        (arguments
+          (identifier)
+          (closure
+            (parameters
+              (parameter
+                (identifier)))
+            (block
+              (let_statement
+                (identifier)
+                (identifier))
+              (identifier))))))))

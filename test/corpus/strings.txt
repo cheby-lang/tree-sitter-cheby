@@ -1,0 +1,89 @@
+================================================================================
+Interpolation and escapes
+================================================================================
+
+const s: String = "at {point.x}, {pair.0} {state:?} \{brace} \u{1F600}\n"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (const_declaration
+    (identifier)
+    (named_type
+      (type_identifier))
+    (string
+      (string_content)
+      (interpolation
+        (identifier)
+        (identifier))
+      (string_content)
+      (interpolation
+        (identifier)
+        (integer))
+      (string_content)
+      (interpolation
+        (identifier))
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (escape_sequence))))
+
+================================================================================
+Multi-line string
+================================================================================
+
+const s: String = "one
+two"
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (const_declaration
+    (identifier)
+    (named_type
+      (type_identifier))
+    (string
+      (string_content))))
+
+================================================================================
+Raw strings
+================================================================================
+
+const a: String = r"^\d{3}$"
+const b: String = r#"a "quoted" word"#
+const c: String = r##"has "# inside"##
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (const_declaration
+    (identifier)
+    (named_type
+      (type_identifier))
+    (raw_string))
+  (const_declaration
+    (identifier)
+    (named_type
+      (type_identifier))
+    (raw_string))
+  (const_declaration
+    (identifier)
+    (named_type
+      (type_identifier))
+    (raw_string)))
+
+================================================================================
+Identifier starting with r is not a raw string
+================================================================================
+
+const rest: Int = rest_count
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (const_declaration
+    (identifier)
+    (named_type
+      (type_identifier))
+    (identifier)))

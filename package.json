@@ -1,0 +1,18 @@
+{
+  "name": "tree-sitter-cheby",
+  "version": "0.1.0",
+  "description": "Cheby grammar for tree-sitter",
+  "license": "MIT",
+  "author": "xikxp1 <xikxp1@gmail.com>",
+  "private": true,
+  "keywords": ["tree-sitter", "parser", "cheby"],
+  "files": ["grammar.js", "tree-sitter.json", "queries/*", "src/**"],
+  "scripts": {
+    "generate": "tree-sitter generate",
+    "test": "tree-sitter test",
+    "parse-examples": "tree-sitter parse --quiet --stat '../cheby/docs/examples/**/*.cheby'"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.27.0"
+  }
+}

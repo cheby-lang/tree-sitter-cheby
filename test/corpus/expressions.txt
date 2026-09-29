@@ -1,0 +1,199 @@
+================================================================================
+Records, spreads and use
+================================================================================
+
+fn f() {
+  let p = Point { ..origin, x: 1, y }
+  let q = shape::Circle { radius: 1.0e3 }
+  let xs = [..front, 0x_ff, 0b101, 0o17, -1]
+  use a, b: Int <- result::try(x)
+  let assert Ok(v) = parse(s) as "no"
+  Show::show(p.x)
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (record_expression
+          (constructor)
+          (spread_element
+            (identifier))
+          (field_initializer
+            (identifier)
+            (integer))
+          (field_initializer
+            (identifier))))
+      (let_statement
+        (identifier)
+        (record_expression
+          (module)
+          (constructor)
+          (field_initializer
+            (identifier)
+            (float))))
+      (let_statement
+        (identifier)
+        (list_expression
+          (spread_element
+            (identifier))
+          (integer)
+          (integer)
+          (integer)
+          (unary_expression
+            (integer))))
+      (use_statement
+        (use_binding
+          (identifier))
+        (use_binding
+          (identifier)
+          (named_type
+            (type_identifier)))
+        (call_expression
+          (path_expression
+            (module)
+            (identifier))
+          (arguments
+            (identifier))))
+      (let_statement
+        (constructor_pattern
+          (constructor)
+          (identifier))
+        (call_expression
+          (identifier)
+          (arguments
+            (identifier)))
+        (string
+          (string_content)))
+      (call_expression
+        (path_expression
+          (type_identifier)
+          (identifier))
+        (arguments
+          (field_expression
+            (identifier)
+            (identifier)))))))
+
+================================================================================
+Case with subjects, patterns and guards
+================================================================================
+
+fn f() {
+  case x, y {
+    Some(v) | None as w, _ when v > 1 => v
+    shape::Circle { radius, .. }, [first, ..rest] => first
+    (a, -1), [..] => panic as "no"
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (case_expression
+        (identifier)
+        (identifier)
+        (case_body
+          (case_arm
+            (as_pattern
+              (or_pattern
+                (constructor_pattern
+                  (constructor)
+                  (identifier))
+                (constructor_pattern
+                  (constructor)))
+              (identifier))
+            (wildcard)
+            (binary_expression
+              (identifier)
+              (integer))
+            (identifier))
+          (case_arm
+            (constructor_pattern
+              (module)
+              (constructor)
+              (field_pattern
+                (identifier)))
+            (list_pattern
+              (identifier)
+              (rest_pattern
+                (identifier)))
+            (identifier))
+          (case_arm
+            (tuple_pattern
+              (identifier)
+              (negative_literal
+                (integer)))
+            (list_pattern
+              (rest_pattern))
+            (panic_expression
+              (string
+                (string_content)))))))))
+
+================================================================================
+Subjectless case
+================================================================================
+
+fn f() {
+  case {
+    n > 0 => "positive"
+    _ => "other"
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (case_expression
+        (condition_body
+          (condition_arm
+            (binary_expression
+              (identifier)
+              (integer))
+            (string
+              (string_content)))
+          (condition_arm
+            (wildcard)
+            (string
+              (string_content))))))))
+
+================================================================================
+Constructor subject is not a record
+================================================================================
+
+fn f() {
+  case Red {
+    Red => 1
+    _ => 0
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (case_expression
+        (constructor)
+        (case_body
+          (case_arm
+            (constructor_pattern
+              (constructor))
+            (integer))
+          (case_arm
+            (wildcard)
+            (integer)))))))
