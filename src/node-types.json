@@ -758,10 +758,6 @@
           {
             "type": "identifier",
             "named": true
-          },
-          {
-            "type": "integer",
-            "named": true
           }
         ]
       },
@@ -1155,10 +1151,6 @@
           {
             "type": "identifier",
             "named": true
-          },
-          {
-            "type": "integer",
-            "named": true
           }
         ]
       },
@@ -1348,12 +1340,12 @@
     "type": "parameter",
     "named": true,
     "fields": {
-      "name": {
+      "pattern": {
         "multiple": false,
         "required": true,
         "types": [
           {
-            "type": "identifier",
+            "type": "_pattern",
             "named": true
           }
         ]

@@ -197,3 +197,38 @@ fn f() {
           (case_arm
             (wildcard)
             (integer)))))))
+
+================================================================================
+Closure with pattern parameters
+================================================================================
+
+fn f() {
+  list::fold(xs, 0, fn(acc, (_, quantity)) { acc + quantity })
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (call_expression
+        (path_expression
+          (module)
+          (identifier))
+        (arguments
+          (identifier)
+          (integer)
+          (closure
+            (parameters
+              (parameter
+                (identifier))
+              (parameter
+                (tuple_pattern
+                  (wildcard)
+                  (identifier))))
+            (block
+              (binary_expression
+                (identifier)
+                (identifier)))))))))

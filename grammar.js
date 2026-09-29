@@ -160,9 +160,12 @@ module.exports = grammar({
 
     parameters: ($) => seq("(", commaSep($.parameter), ")"),
 
+    // Closures and local functions take irrefutable patterns (D-242). The
+    // grammar accepts them in top-level functions too, and the compiler
+    // rejects anything but a plain name there.
     parameter: ($) =>
       seq(
-        field("name", $.identifier),
+        field("pattern", $._pattern),
         optional(seq(":", field("type", $._type))),
       ),
 
@@ -395,11 +398,7 @@ module.exports = grammar({
     field_expression: ($) =>
       prec(
         PREC.postfix,
-        seq(
-          field("value", $._expression),
-          ".",
-          field("field", choice($.identifier, $.integer)),
-        ),
+        seq(field("value", $._expression), ".", field("field", $.identifier)),
       ),
 
     // `io::println`, `board::Won`, `Show::show`, `shape::Shape::area`,
@@ -589,7 +588,7 @@ module.exports = grammar({
       seq(
         "{",
         field("name", $.identifier),
-        repeat(seq(".", field("field", choice($.identifier, $.integer)))),
+        repeat(seq(".", field("field", $.identifier))),
         optional(":?"),
         "}",
       ),

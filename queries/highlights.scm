@@ -24,7 +24,11 @@
 (wildcard) @variable.special
 
 (parameter
-  name: (identifier) @variable.parameter)
+  pattern: (identifier) @variable.parameter)
+
+(parameter
+  pattern: (tuple_pattern
+    (identifier) @variable.parameter))
 
 (const_declaration
   name: (identifier) @constant)

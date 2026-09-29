@@ -2,7 +2,7 @@
 Interpolation and escapes
 ================================================================================
 
-const s: String = "at {point.x}, {pair.0} {state:?} \{brace} \u{1F600}\n"
+const s: String = "at {point.x}, {user.name} {state:?} \{brace} \u{1F600}\n"
 
 --------------------------------------------------------------------------------
 
@@ -19,7 +19,7 @@ const s: String = "at {point.x}, {pair.0} {state:?} \{brace} \u{1F600}\n"
       (string_content)
       (interpolation
         (identifier)
-        (integer))
+        (identifier))
       (string_content)
       (interpolation
         (identifier))
