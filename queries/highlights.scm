@@ -67,6 +67,17 @@
   function: (path_expression
     name: (identifier) @function))
 
+; A bare function on the right of `|>` is called with the left side,
+; as in `text |> string::trim` (D-244).
+(binary_expression
+  operator: "|>"
+  right: (identifier) @function)
+
+(binary_expression
+  operator: "|>"
+  right: (path_expression
+    name: (identifier) @function))
+
 (path_expression
   interface: (type_identifier) @type)
 
