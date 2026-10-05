@@ -2,7 +2,7 @@
   "name": "tree-sitter-cheby",
   "version": "0.1.0",
   "description": "Cheby grammar for tree-sitter",
-  "license": "MIT",
+  "license": "MIT OR Apache-2.0",
   "author": "xikxp1 <xikxp1@gmail.com>",
   "private": true,
   "keywords": ["tree-sitter", "parser", "cheby"],
