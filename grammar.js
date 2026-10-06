@@ -616,10 +616,28 @@ module.exports = grammar({
 
     _module: ($) => alias($.identifier, $.module),
 
-    comment: (_) => token(prec(1, seq("//", /[^\n]*/))),
+    // Comment kinds follow the Rust rule (D-428). The three token languages
+    // are disjoint, so every comment is resolved by longest match and the
+    // equal precedences never decide between them:
+    //   comment      "//" at end of line, "//" + a char other than "/" or "!",
+    //                or "////..."
+    //   doc_comment  "///" at end of line, or "///" + a char other than "/"
+    //   module_doc   "//!..." (including "//!!...")
+    comment: (_) =>
+      token(
+        prec(
+          1,
+          choice(
+            "//",
+            seq("//", /[^/!\n]/, /[^\n]*/),
+            seq("////", /[^\n]*/),
+          ),
+        ),
+      ),
 
-    doc_comment: (_) => token(prec(2, seq("///", /[^\n]*/))),
+    doc_comment: (_) =>
+      token(prec(1, choice("///", seq("///", /[^/\n]/, /[^\n]*/)))),
 
-    module_doc: (_) => token(prec(2, seq("//!", /[^\n]*/))),
+    module_doc: (_) => token(prec(1, seq("//!", /[^\n]*/))),
   },
 });

@@ -4354,15 +4354,41 @@
         "type": "PREC",
         "value": 1,
         "content": {
-          "type": "SEQ",
+          "type": "CHOICE",
           "members": [
             {
               "type": "STRING",
               "value": "//"
             },
             {
-              "type": "PATTERN",
-              "value": "[^\\n]*"
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "//"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[^/!\\n]"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[^\\n]*"
+                }
+              ]
+            },
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "////"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[^\\n]*"
+                }
+              ]
             }
           ]
         }
@@ -4372,17 +4398,30 @@
       "type": "TOKEN",
       "content": {
         "type": "PREC",
-        "value": 2,
+        "value": 1,
         "content": {
-          "type": "SEQ",
+          "type": "CHOICE",
           "members": [
             {
               "type": "STRING",
               "value": "///"
             },
             {
-              "type": "PATTERN",
-              "value": "[^\\n]*"
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "///"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[^/\\n]"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "[^\\n]*"
+                }
+              ]
             }
           ]
         }
@@ -4392,7 +4431,7 @@
       "type": "TOKEN",
       "content": {
         "type": "PREC",
-        "value": 2,
+        "value": 1,
         "content": {
           "type": "SEQ",
           "members": [
