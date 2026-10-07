@@ -1,40 +1,103 @@
 ================================================================================
-Interpolation and escapes
+Turbofish with whitespace
 ================================================================================
 
-const s: String = "at {point.x}, {user.name} {state:?} \{brace} \u{1F600}\n"
+fn f() {
+  map::new:: < String >()
+}
 
 --------------------------------------------------------------------------------
 
 (source_file
-  (const_declaration
+  (function_declaration
     (identifier)
-    (named_type
-      (type_identifier))
-    (string
-      (string_content)
-      (interpolation
+    (parameters)
+    (block
+      (call_expression
+        (path_expression
+          (module)
+          (identifier)
+          (turbofish
+            (named_type
+              (type_identifier))))
+        (arguments)))))
+
+================================================================================
+Longest match keeps `<<` and `<=`
+================================================================================
+
+fn f() {
+  let a = b<<-1
+  let c = b<=-1
+  let d = b < -1
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (binary_expression
+          (identifier)
+          (unary_expression
+            (integer))))
+      (let_statement
+        (identifier)
+        (binary_expression
+          (identifier)
+          (unary_expression
+            (integer))))
+      (let_statement
+        (identifier)
+        (binary_expression
+          (identifier)
+          (unary_expression
+            (integer)))))))
+
+================================================================================
+Names that look like keywords
+================================================================================
+
+@async
+fn f() {
+  let if = 1
+  let _x = async
+  let _ = self
+  g(_)
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (attribute
+    (identifier))
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (integer))
+      (let_statement
         (identifier)
         (identifier))
-      (string_content)
-      (interpolation
+      (let_statement
+        (wildcard)
+        (identifier))
+      (call_expression
         (identifier)
-        (identifier))
-      (string_content)
-      (interpolation
-        (identifier))
-      (string_content)
-      (escape_sequence)
-      (string_content)
-      (escape_sequence)
-      (escape_sequence))))
+        (arguments
+          (wildcard))))))
 
 ================================================================================
-Multi-line string
+Type arguments split `>>` and `>=`
 ================================================================================
 
-const s: String = "one
-two"
+const e: List<List<Int>>= []
 
 --------------------------------------------------------------------------------
 
@@ -42,125 +105,116 @@ two"
   (const_declaration
     (identifier)
     (named_type
-      (type_identifier))
-    (string
-      (string_content))))
+      (type_identifier)
+      (type_arguments
+        (named_type
+          (type_identifier)
+          (type_arguments
+            (named_type
+              (type_identifier))))))
+    (list_expression)))
 
 ================================================================================
-Raw strings
-================================================================================
-
-const a: String = r"^\d{3}$"
-const b: String = r#"a "quoted" word"#
-const c: String = r##"has "# inside"##
-
---------------------------------------------------------------------------------
-
-(source_file
-  (const_declaration
-    (identifier)
-    (named_type
-      (type_identifier))
-    (raw_string))
-  (const_declaration
-    (identifier)
-    (named_type
-      (type_identifier))
-    (raw_string))
-  (const_declaration
-    (identifier)
-    (named_type
-      (type_identifier))
-    (raw_string)))
-
-================================================================================
-Identifier starting with r is not a raw string
-================================================================================
-
-const rest: Int = rest_count
-
---------------------------------------------------------------------------------
-
-(source_file
-  (const_declaration
-    (identifier)
-    (named_type
-      (type_identifier))
-    (identifier)))
-
-================================================================================
-Spaces inside interpolation braces
-================================================================================
-
-const s: String = "{ name } {	user . name :? }"
-
---------------------------------------------------------------------------------
-
-(source_file
-  (const_declaration
-    (identifier)
-    (named_type
-      (type_identifier))
-    (string
-      (interpolation
-        (identifier))
-      (string_content)
-      (interpolation
-        (identifier)
-        (identifier)))))
-
-================================================================================
-Unterminated raw string
+`<-` is one token
 :error
 ================================================================================
 
-const s: String = r"abc
+fn f() {
+  let b = a<-1
+}
 
 --------------------------------------------------------------------------------
 
 ================================================================================
-Unterminated raw string with hashes
+Wildcard is not a value
 :error
 ================================================================================
 
-const s: String = r#"abc"
+fn f() {
+  let x = _
+}
 
 --------------------------------------------------------------------------------
 
 ================================================================================
-Line break inside an interpolation
+Keyword as a function name
 :error
 ================================================================================
 
-const s: String = "{name
-}"
+fn test() {
+  1
+}
 
 --------------------------------------------------------------------------------
 
 ================================================================================
-Comment inside an interpolation
+Keyword as a field
 :error
 ================================================================================
 
-const s: String = "{name // c
-}"
+fn f() {
+  x.type
+}
 
 --------------------------------------------------------------------------------
 
 ================================================================================
-Wildcard inside an interpolation
+Keyword as a record field
 :error
 ================================================================================
 
-const s: String = "{_}"
+fn f() {
+  P { type: 1 }
+}
 
 --------------------------------------------------------------------------------
 
 ================================================================================
-Keyword inside an interpolation
+Keyword as an attribute name
 :error
 ================================================================================
 
-const s: String = "{fn}"
+@test
+fn f() {
+  1
+}
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Keyword as a pattern
+:error
+================================================================================
+
+fn f() {
+  let case = 1
+}
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Keyword as a module
+:error
+================================================================================
+
+import std::type
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Form feed is not whitespace
+:error
+================================================================================
+
+const x: Int =1
+
+--------------------------------------------------------------------------------
+
+================================================================================
+Vertical tab is not whitespace
+:error
+================================================================================
+
+const x: Int =1
 
 --------------------------------------------------------------------------------
