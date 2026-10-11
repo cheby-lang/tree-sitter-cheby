@@ -3,17 +3,24 @@
  * @author xikxp1 <xikxp1@gmail.com>
  *
  * Follows docs/spec/appendix-a-grammar.md of the Cheby repository. The
- * grammar is deliberately more permissive than the spec (for example, it
- * accepts camelCase identifiers and trailing commas everywhere), because it
- * is meant for editors, not for rejecting invalid programs.
+ * grammar is deliberately more permissive than the spec where the compiler
+ * reports a validation error instead of a grammar error (D-424): for
+ * example, it accepts camelCase identifiers and trailing commas everywhere.
  *
- * Newlines (spec §2.8) are handled by the external scanner in src/scanner.c.
- * A newline becomes a `_newline` token only where the grammar allows one
- * (between items, statements, case arms and interface functions). In every
- * other position, such as inside `( )`, `[ ]`, `< >` or after a binary
- * operator, it is ordinary whitespace. That matches the spec's "open
- * brackets" and "trailing continuation token" rules. The scanner implements
- * the "leading continuation token" rule (`|>`, `&&`, `||`) itself.
+ * The grammar must reject everything the compiler parser reports as a
+ * grammar error (D-424), so line breaks, lexing and keywords are strict:
+ *
+ * - Line breaks (spec §2.8, D-231) are decided by the external scanner in
+ *   src/scanner.c, which mirrors the compiler parser's newline policy. It
+ *   tracks the open delimiters, and a line break inside `( )`, `[ ]` or type
+ *   `< >` is whitespace. Elsewhere a line break is whitespace before a
+ *   leading `|>`, `&&`, `||`, `}` or the end of the file, and after the
+ *   tokens that continue a line, which the grammar marks with `cont`. Any
+ *   other line break is a `_newline` token, which the grammar accepts only
+ *   between items, statements, case arms and interface functions.
+ * - Keywords are reserved everywhere (§2.4), and a lone `_` is not an
+ *   identifier.
+ * - Whitespace is space, tab, CR and LF only (§2.1).
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
@@ -37,16 +44,49 @@ const PREC = {
 };
 
 /**
- * One or more `rule`s separated by commas, with an optional trailing comma.
- * @param {RuleOrLiteral} rule
+ * A token after which a line break continues the line (§2.8 rule 2): `,`,
+ * `=`, `=>`, `->`, `<-`, a binary operator, or a `{` that opens a list.
+ * The scanner turns such a line break into `_line_continuation`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} token
  */
-const commaSep1 = (rule) => seq(rule, repeat(seq(",", rule)), optional(","));
+const cont = ($, token) => seq(token, optional($._line_continuation));
 
 /**
- * Zero or more `rule`s separated by commas, with an optional trailing comma.
+ * One or more `rule`s separated by `sep`, with an optional trailing `sep`.
+ * @param {RuleOrLiteral} sep
+ * @param {RuleOrLiteral} rule
+ */
+const sepBy1 = (sep, rule) => seq(rule, repeat(seq(sep, rule)), optional(sep));
+
+/**
+ * One or more `rule`s separated by commas, with an optional trailing comma,
+ * inside `( )`, `[ ]` or type `< >`, where line breaks are whitespace.
+ * @param {RuleOrLiteral} rule
+ */
+const commaSep1 = (rule) => sepBy1(",", rule);
+
+/**
+ * Zero or more `rule`s, as in `commaSep1`.
  * @param {RuleOrLiteral} rule
  */
 const commaSep = (rule) => optional(commaSep1(rule));
+
+/**
+ * One or more `rule`s separated by commas, with an optional trailing comma,
+ * where line breaks are significant: a line break may follow a comma.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} rule
+ */
+const lineCommaSep1 = ($, rule) => sepBy1(cont($, ","), rule);
+
+/**
+ * A comma-separated list in `{ … }`, possibly empty.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} rule
+ */
+const braceList = ($, rule) =>
+  seq(cont($, "{"), optional(lineCommaSep1($, rule)), "}");
 
 /**
  * One or more `rule`s separated by significant newlines.
@@ -64,11 +104,113 @@ const lines1 = ($, rule) =>
 const newlineBody = ($, rule) =>
   seq("{", optional($._newline), optional(lines1($, rule)), "}");
 
+/**
+ * The binary operators, from the loosest to the tightest (§5.4).
+ * @type {[number, RuleOrLiteral][]}
+ */
+const BINARY_OPERATORS = [
+  [PREC.or, "||"],
+  [PREC.and, "&&"],
+  [PREC.compare, choice("==", "!=", "<", "<=", ">", ">=")],
+  [PREC.pipe, "|>"],
+  [PREC.bit_or, "|"],
+  [PREC.bit_xor, "^"],
+  [PREC.bit_and, "&"],
+  [PREC.shift, choice("<<", ">>")],
+  [PREC.additive, choice("+", "-")],
+  [PREC.multiplicative, choice("*", "/", "%")],
+];
+
+/**
+ * A binary operation whose operands are `left` and `right`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} left
+ * @param {RuleOrLiteral} right
+ */
+const binary = ($, left, right) =>
+  choice(
+    ...BINARY_OPERATORS.map(([precedence, operator]) =>
+      prec.left(
+        precedence,
+        seq(
+          field("left", left),
+          field("operator", operator),
+          optional($._line_continuation),
+          field("right", right),
+        ),
+      ),
+    ),
+  );
+
+/**
+ * A prefix operation on `operand`.
+ * @param {RuleOrLiteral} operand
+ */
+const unary = (operand) =>
+  prec(
+    PREC.unary,
+    seq(field("operator", choice("-", "!")), field("operand", operand)),
+  );
+
+/**
+ * A call of `callee`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} callee
+ */
+const call = ($, callee) =>
+  prec(
+    PREC.postfix,
+    seq(field("function", callee), field("arguments", $.arguments)),
+  );
+
+/**
+ * A field access on `value`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} value
+ */
+const fieldAccess = ($, value) =>
+  prec(
+    PREC.postfix,
+    seq(field("value", value), ".", field("field", $.identifier)),
+  );
+
+/**
+ * The expressions that are neither operations nor postfix forms, except
+ * record expressions and blocks, which a `case` subject restricts.
+ * @param {GrammarSymbols<string>} $
+ */
+const atoms = ($) => [
+  $.identifier,
+  alias($.type_identifier, $.constructor),
+  $.path_expression,
+  $.integer,
+  $.float,
+  $.string,
+  $.raw_string,
+  $.tuple_expression,
+  $.parenthesized_expression,
+  $.list_expression,
+  $.closure,
+  $.case_expression,
+  $.panic_expression,
+  $.todo_expression,
+];
+
+/**
+ * Type arguments or type parameters: `<` and `>` are delimiters there, in
+ * which line breaks are whitespace.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} rule
+ */
+const angleList = ($, rule) =>
+  seq(alias($._type_lt, "<"), commaSep1(rule), alias($._type_gt, ">"));
+
 module.exports = grammar({
   name: "cheby",
 
   word: ($) => $.identifier,
 
+  // The order must match `enum TokenType` in src/scanner.c.
   externals: ($) => [
     $._newline,
     $.string_content,
@@ -76,21 +218,60 @@ module.exports = grammar({
     // Never used in the grammar. Tree-sitter marks every symbol as valid
     // during error recovery, so the scanner checks this one to detect that.
     $._error_sentinel,
+    $._line_continuation,
+    // An extra, valid everywhere, so that tree-sitter calls the scanner
+    // before every token. It is also a line break that is whitespace.
+    $._hook,
+    // Never used in the grammar: a line break or a comment inside an
+    // interpolation.
+    $._invalid,
+    $._type_lt,
+    $._type_gt,
+    // The scanner lexes every delimiter to track which ones are open.
+    "(",
+    ")",
+    "[",
+    "]",
+    "{",
+    "}",
+    // `<-` by longest match, so that `a<-1` is not `a < -1`.
+    "<-",
   ],
 
-  extras: ($) => [/\s/, $.comment, $.doc_comment, $.module_doc],
+  extras: ($) => [$._hook, /[ \t\r\n]/, $.comment, $.doc_comment, $.module_doc],
+
+  // The keywords of §2.4, which are never names. Reserved words such as
+  // `if` are names to the grammar and rejected by validation (E0007).
+  reserved: {
+    global: (_) => [
+      "as",
+      "assert",
+      "case",
+      "const",
+      "dyn",
+      "exposed",
+      "fn",
+      "import",
+      "interface",
+      "let",
+      "panic",
+      "priv",
+      "pub",
+      "test",
+      "todo",
+      "type",
+      "use",
+      "when",
+    ],
+  },
+
+  inline: ($) => [$._module],
 
   supertypes: ($) => [$._expression, $._pattern, $._type],
 
-  conflicts: ($) => [
-    // `case Foo {`: a subject that is a constructor name followed by the
-    // case body, not a record expression (spec §5.9.6).
-    [$._expression, $.record_expression],
-    [$.path_expression, $.record_expression],
-  ],
-
   rules: {
-    source_file: ($) => seq(optional($._newline), optional(lines1($, $._item))),
+    source_file: ($) =>
+      seq(optional($._newline), optional(lines1($, $._item))),
 
     // ---------------------------------------------------------------------
     // Items (A.1, A.2)
@@ -118,7 +299,8 @@ module.exports = grammar({
         optional(seq("as", field("alias", $._module))),
       ),
 
-    import_list: ($) => seq("{", commaSep1($.import_item), "}"),
+    import_list: ($) =>
+      seq(cont($, "{"), lineCommaSep1($, $.import_item), "}"),
 
     import_item: ($) =>
       seq(
@@ -154,7 +336,7 @@ module.exports = grammar({
         field("name", $.identifier),
         optional(field("type_parameters", $.type_parameters)),
         field("parameters", $.parameters),
-        optional(seq("->", field("return_type", $._type))),
+        optional(seq(cont($, "->"), field("return_type", $._type))),
         optional(field("body", $.block)),
       ),
 
@@ -169,7 +351,7 @@ module.exports = grammar({
         optional(seq(":", field("type", $._type))),
       ),
 
-    type_parameters: ($) => seq("<", commaSep1($.type_parameter), ">"),
+    type_parameters: ($) => angleList($, $.type_parameter),
 
     type_parameter: ($) =>
       seq(
@@ -189,7 +371,7 @@ module.exports = grammar({
         optional(field("body", choice($.variant_list, $.field_list))),
       ),
 
-    variant_list: ($) => seq("{", commaSep1($.variant), "}"),
+    variant_list: ($) => seq(cont($, "{"), lineCommaSep1($, $.variant), "}"),
 
     variant: ($) =>
       seq(
@@ -201,7 +383,7 @@ module.exports = grammar({
 
     positional_field_list: ($) => seq("(", commaSep($._type), ")"),
 
-    field_list: ($) => seq("{", commaSep($.field_declaration), "}"),
+    field_list: ($) => braceList($, $.field_declaration),
 
     field_declaration: ($) =>
       seq(field("name", $.identifier), ":", field("type", $._type)),
@@ -212,7 +394,7 @@ module.exports = grammar({
         "type",
         field("name", $.type_identifier),
         optional(field("type_parameters", $.type_parameters)),
-        "=",
+        cont($, "="),
         field("type", $._type),
       ),
 
@@ -222,7 +404,7 @@ module.exports = grammar({
         "const",
         field("name", $.identifier),
         optional(seq(":", field("type", $._type))),
-        "=",
+        cont($, "="),
         field("value", $._expression),
       ),
 
@@ -242,7 +424,7 @@ module.exports = grammar({
         "fn",
         field("name", $.identifier),
         field("parameters", $.parameter_types),
-        optional(seq("->", field("return_type", $._type))),
+        optional(seq(cont($, "->"), field("return_type", $._type))),
       ),
 
     parameter_types: ($) => seq("(", commaSep($._type), ")"),
@@ -264,7 +446,7 @@ module.exports = grammar({
         optional(field("arguments", $.type_arguments)),
       ),
 
-    type_arguments: ($) => seq("<", commaSep1($._type), ">"),
+    type_arguments: ($) => angleList($, $._type),
 
     tuple_type: ($) => seq("(", commaSep($._type), ")"),
 
@@ -273,7 +455,7 @@ module.exports = grammar({
         seq(
           "fn",
           field("parameters", $.parameter_types),
-          optional(seq("->", field("return_type", $._type))),
+          optional(seq(cont($, "->"), field("return_type", $._type))),
         ),
       ),
 
@@ -300,13 +482,18 @@ module.exports = grammar({
         optional("assert"),
         field("pattern", $._pattern),
         optional(seq(":", field("type", $._type))),
-        "=",
+        cont($, "="),
         field("value", $._expression),
         optional(seq("as", field("message", $._expression))),
       ),
 
     use_statement: ($) =>
-      seq("use", commaSep($.use_binding), "<-", field("value", $._expression)),
+      seq(
+        "use",
+        optional(lineCommaSep1($, $.use_binding)),
+        cont($, "<-"),
+        field("value", $._expression),
+      ),
 
     use_binding: ($) =>
       seq(
@@ -331,75 +518,63 @@ module.exports = grammar({
         $.unary_expression,
         $.call_expression,
         $.field_expression,
-        $.identifier,
-        alias($.type_identifier, $.constructor),
-        $.path_expression,
+        ...atoms($),
         $.record_expression,
-        $.integer,
-        $.float,
-        $.string,
-        $.raw_string,
-        $.tuple_expression,
-        $.parenthesized_expression,
-        $.list_expression,
         $.block,
-        $.closure,
-        $.case_expression,
-        $.panic_expression,
-        $.todo_expression,
       ),
 
-    binary_expression: ($) => {
-      /** @type {[number, RuleOrLiteral][]} */
-      const table = [
-        [PREC.or, "||"],
-        [PREC.and, "&&"],
-        [PREC.compare, choice("==", "!=", "<", "<=", ">", ">=")],
-        [PREC.pipe, "|>"],
-        [PREC.bit_or, "|"],
-        [PREC.bit_xor, "^"],
-        [PREC.bit_and, "&"],
-        [PREC.shift, choice("<<", ">>")],
-        [PREC.additive, choice("+", "-")],
-        [PREC.multiplicative, choice("*", "/", "%")],
-      ];
-      return choice(
-        ...table.map(([precedence, operator]) =>
-          prec.left(
-            precedence,
-            seq(
-              field("left", $._expression),
-              field("operator", operator),
-              field("right", $._expression),
-            ),
-          ),
-        ),
-      );
-    },
+    binary_expression: ($) => binary($, $._expression, $._expression),
 
-    unary_expression: ($) =>
-      prec(
-        PREC.unary,
-        seq(
-          field("operator", choice("-", "!")),
-          field("operand", $._expression),
-        ),
-      ),
+    unary_expression: ($) => unary($._expression),
 
-    call_expression: ($) =>
-      prec(
-        PREC.postfix,
-        seq(field("function", $._expression), field("arguments", $.arguments)),
-      ),
+    call_expression: ($) => call($, $._expression),
 
     arguments: ($) =>
       seq("(", commaSep(choice($._expression, $.wildcard)), ")"),
 
-    field_expression: ($) =>
-      prec(
-        PREC.postfix,
-        seq(field("value", $._expression), ".", field("field", $.identifier)),
+    field_expression: ($) => fieldAccess($, $._expression),
+
+    // A `case` subject (spec §5.9.6, A.5). Outside brackets, an UPPER path
+    // followed by `{` never starts a record expression, since the `{` opens
+    // the arms, and a subject cannot start with `{`, since `case {` is
+    // subjectless. The compiler parser threads the same restriction through
+    // operands, calls and field accesses. `_subject` is a whole subject,
+    // which cannot start with a block; `_subject_rest` is an operand after
+    // the subject's first token, which can. The operations alias to the
+    // usual node names, so a subject's tree looks like any expression's.
+    _subject: ($) =>
+      choice(
+        alias($._subject_binary_expression, $.binary_expression),
+        alias($._subject_unary_expression, $.unary_expression),
+        alias($._subject_call_expression, $.call_expression),
+        alias($._subject_field_expression, $.field_expression),
+        ...atoms($),
       ),
+
+    _subject_rest: ($) =>
+      choice(
+        alias($._subject_rest_binary_expression, $.binary_expression),
+        alias($._subject_unary_expression, $.unary_expression),
+        alias($._subject_rest_call_expression, $.call_expression),
+        alias($._subject_rest_field_expression, $.field_expression),
+        ...atoms($),
+        $.block,
+      ),
+
+    _subject_binary_expression: ($) => binary($, $._subject, $._subject_rest),
+
+    _subject_rest_binary_expression: ($) =>
+      binary($, $._subject_rest, $._subject_rest),
+
+    _subject_unary_expression: ($) => unary($._subject_rest),
+
+    _subject_call_expression: ($) => call($, $._subject),
+
+    _subject_rest_call_expression: ($) => call($, $._subject_rest),
+
+    _subject_field_expression: ($) => fieldAccess($, $._subject),
+
+    _subject_rest_field_expression: ($) => fieldAccess($, $._subject_rest),
 
     // `io::println`, `board::Won`, `Show::show`, `shape::Shape::area`,
     // `channel::new::<Int>`.
@@ -430,19 +605,23 @@ module.exports = grammar({
         ),
       ),
 
-    // `::<` is one token so that `name::<T>` and `module::name` can be told
-    // apart with one token of lookahead.
     _turbofish: ($) => field("type_arguments", $.turbofish),
 
-    turbofish: ($) => seq("::<", commaSep1($._type), ">"),
+    // `::` and `<` are two tokens, as in the compiler (§2.6), so `f:: <T>()`
+    // is a turbofish too.
+    turbofish: ($) => seq("::", angleList($, $._type)),
 
+    // The precedence makes `Name {` a record wherever an unrestricted
+    // expression may end before a `case` body, as in `case panic as Name {`,
+    // since the compiler parser's `as` message takes any expression.
     record_expression: ($) =>
-      seq(
-        optional(seq(field("module", $._module), "::")),
-        field("name", alias($.type_identifier, $.constructor)),
-        "{",
-        commaSep(choice($.field_initializer, $.spread_element)),
-        "}",
+      prec(
+        1,
+        seq(
+          optional(seq(field("module", $._module), "::")),
+          field("name", alias($.type_identifier, $.constructor)),
+          braceList($, choice($.field_initializer, $.spread_element)),
+        ),
       ),
 
     field_initializer: ($) =>
@@ -465,7 +644,7 @@ module.exports = grammar({
       seq(
         "fn",
         field("parameters", $.parameters),
-        optional(seq("->", field("return_type", $._type))),
+        optional(seq(cont($, "->"), field("return_type", $._type))),
         field("body", $.block),
       ),
 
@@ -473,8 +652,8 @@ module.exports = grammar({
       choice(
         seq(
           "case",
-          field("subject", $._expression),
-          repeat(seq(",", field("subject", $._expression))),
+          field("subject", $._subject),
+          repeat(seq(cont($, ","), field("subject", $._subject))),
           field("body", $.case_body),
         ),
         seq("case", field("body", $.condition_body)),
@@ -485,9 +664,9 @@ module.exports = grammar({
     case_arm: ($) =>
       seq(
         field("pattern", $._pattern),
-        repeat(seq(",", field("pattern", $._pattern))),
+        repeat(seq(cont($, ","), field("pattern", $._pattern))),
         optional(seq("when", field("guard", $._expression))),
-        "=>",
+        cont($, "=>"),
         field("value", $._expression),
       ),
 
@@ -498,7 +677,7 @@ module.exports = grammar({
     condition_arm: ($) =>
       seq(
         field("condition", choice($._expression, $.wildcard)),
-        "=>",
+        cont($, "=>"),
         field("value", $._expression),
       ),
 
@@ -550,7 +729,7 @@ module.exports = grammar({
         optional(
           choice(
             seq("(", commaSep($._pattern), ")"),
-            seq("{", commaSep(choice($.field_pattern, "..")), "}"),
+            braceList($, choice($.field_pattern, "..")),
           ),
         ),
       ),
@@ -609,8 +788,10 @@ module.exports = grammar({
     // ---------------------------------------------------------------------
 
     // The spec forbids upper-case letters in LOWER and `_` in UPPER. The
-    // grammar accepts both so that misspelled names still highlight.
-    identifier: (_) => /[a-z_][a-zA-Z0-9_]*/,
+    // grammar accepts both so that misspelled names still highlight
+    // (validation reports them, E0006). A lone `_` is the wildcard, never a
+    // name.
+    identifier: (_) => /[a-z][a-zA-Z0-9_]*|_[a-zA-Z0-9_]+/,
 
     type_identifier: (_) => /[A-Z][a-zA-Z0-9_]*/,
 

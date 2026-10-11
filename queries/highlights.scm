@@ -214,7 +214,7 @@
 
 (turbofish
   [
-    "::<"
+    "<"
     ">"
   ] @punctuation.bracket)
 
