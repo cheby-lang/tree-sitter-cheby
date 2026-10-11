@@ -105,6 +105,98 @@ const newlineBody = ($, rule) =>
   seq("{", optional($._newline), optional(lines1($, rule)), "}");
 
 /**
+ * The binary operators, from the loosest to the tightest (§5.4).
+ * @type {[number, RuleOrLiteral][]}
+ */
+const BINARY_OPERATORS = [
+  [PREC.or, "||"],
+  [PREC.and, "&&"],
+  [PREC.compare, choice("==", "!=", "<", "<=", ">", ">=")],
+  [PREC.pipe, "|>"],
+  [PREC.bit_or, "|"],
+  [PREC.bit_xor, "^"],
+  [PREC.bit_and, "&"],
+  [PREC.shift, choice("<<", ">>")],
+  [PREC.additive, choice("+", "-")],
+  [PREC.multiplicative, choice("*", "/", "%")],
+];
+
+/**
+ * A binary operation whose operands are `left` and `right`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} left
+ * @param {RuleOrLiteral} right
+ */
+const binary = ($, left, right) =>
+  choice(
+    ...BINARY_OPERATORS.map(([precedence, operator]) =>
+      prec.left(
+        precedence,
+        seq(
+          field("left", left),
+          field("operator", operator),
+          optional($._line_continuation),
+          field("right", right),
+        ),
+      ),
+    ),
+  );
+
+/**
+ * A prefix operation on `operand`.
+ * @param {RuleOrLiteral} operand
+ */
+const unary = (operand) =>
+  prec(
+    PREC.unary,
+    seq(field("operator", choice("-", "!")), field("operand", operand)),
+  );
+
+/**
+ * A call of `callee`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} callee
+ */
+const call = ($, callee) =>
+  prec(
+    PREC.postfix,
+    seq(field("function", callee), field("arguments", $.arguments)),
+  );
+
+/**
+ * A field access on `value`.
+ * @param {GrammarSymbols<string>} $
+ * @param {RuleOrLiteral} value
+ */
+const fieldAccess = ($, value) =>
+  prec(
+    PREC.postfix,
+    seq(field("value", value), ".", field("field", $.identifier)),
+  );
+
+/**
+ * The expressions that are neither operations nor postfix forms, except
+ * record expressions and blocks, which a `case` subject restricts.
+ * @param {GrammarSymbols<string>} $
+ */
+const atoms = ($) => [
+  $.identifier,
+  alias($.type_identifier, $.constructor),
+  $.path_expression,
+  $.integer,
+  $.float,
+  $.string,
+  $.raw_string,
+  $.tuple_expression,
+  $.parenthesized_expression,
+  $.list_expression,
+  $.closure,
+  $.case_expression,
+  $.panic_expression,
+  $.todo_expression,
+];
+
+/**
  * Type arguments or type parameters: `<` and `>` are delimiters there, in
  * which line breaks are whitespace.
  * @param {GrammarSymbols<string>} $
@@ -176,13 +268,6 @@ module.exports = grammar({
   inline: ($) => [$._module],
 
   supertypes: ($) => [$._expression, $._pattern, $._type],
-
-  conflicts: ($) => [
-    // `case Foo {`: a subject that is a constructor name followed by the
-    // case body, not a record expression (spec §5.9.6).
-    [$._expression, $.record_expression],
-    [$.path_expression, $.record_expression],
-  ],
 
   rules: {
     source_file: ($) =>
@@ -433,76 +518,63 @@ module.exports = grammar({
         $.unary_expression,
         $.call_expression,
         $.field_expression,
-        $.identifier,
-        alias($.type_identifier, $.constructor),
-        $.path_expression,
+        ...atoms($),
         $.record_expression,
-        $.integer,
-        $.float,
-        $.string,
-        $.raw_string,
-        $.tuple_expression,
-        $.parenthesized_expression,
-        $.list_expression,
         $.block,
-        $.closure,
-        $.case_expression,
-        $.panic_expression,
-        $.todo_expression,
       ),
 
-    binary_expression: ($) => {
-      /** @type {[number, RuleOrLiteral][]} */
-      const table = [
-        [PREC.or, "||"],
-        [PREC.and, "&&"],
-        [PREC.compare, choice("==", "!=", "<", "<=", ">", ">=")],
-        [PREC.pipe, "|>"],
-        [PREC.bit_or, "|"],
-        [PREC.bit_xor, "^"],
-        [PREC.bit_and, "&"],
-        [PREC.shift, choice("<<", ">>")],
-        [PREC.additive, choice("+", "-")],
-        [PREC.multiplicative, choice("*", "/", "%")],
-      ];
-      return choice(
-        ...table.map(([precedence, operator]) =>
-          prec.left(
-            precedence,
-            seq(
-              field("left", $._expression),
-              field("operator", operator),
-              optional($._line_continuation),
-              field("right", $._expression),
-            ),
-          ),
-        ),
-      );
-    },
+    binary_expression: ($) => binary($, $._expression, $._expression),
 
-    unary_expression: ($) =>
-      prec(
-        PREC.unary,
-        seq(
-          field("operator", choice("-", "!")),
-          field("operand", $._expression),
-        ),
-      ),
+    unary_expression: ($) => unary($._expression),
 
-    call_expression: ($) =>
-      prec(
-        PREC.postfix,
-        seq(field("function", $._expression), field("arguments", $.arguments)),
-      ),
+    call_expression: ($) => call($, $._expression),
 
     arguments: ($) =>
       seq("(", commaSep(choice($._expression, $.wildcard)), ")"),
 
-    field_expression: ($) =>
-      prec(
-        PREC.postfix,
-        seq(field("value", $._expression), ".", field("field", $.identifier)),
+    field_expression: ($) => fieldAccess($, $._expression),
+
+    // A `case` subject (spec §5.9.6, A.5). Outside brackets, an UPPER path
+    // followed by `{` never starts a record expression, since the `{` opens
+    // the arms, and a subject cannot start with `{`, since `case {` is
+    // subjectless. The compiler parser threads the same restriction through
+    // operands, calls and field accesses. `_subject` is a whole subject,
+    // which cannot start with a block; `_subject_rest` is an operand after
+    // the subject's first token, which can. The operations alias to the
+    // usual node names, so a subject's tree looks like any expression's.
+    _subject: ($) =>
+      choice(
+        alias($._subject_binary_expression, $.binary_expression),
+        alias($._subject_unary_expression, $.unary_expression),
+        alias($._subject_call_expression, $.call_expression),
+        alias($._subject_field_expression, $.field_expression),
+        ...atoms($),
       ),
+
+    _subject_rest: ($) =>
+      choice(
+        alias($._subject_rest_binary_expression, $.binary_expression),
+        alias($._subject_unary_expression, $.unary_expression),
+        alias($._subject_rest_call_expression, $.call_expression),
+        alias($._subject_rest_field_expression, $.field_expression),
+        ...atoms($),
+        $.block,
+      ),
+
+    _subject_binary_expression: ($) => binary($, $._subject, $._subject_rest),
+
+    _subject_rest_binary_expression: ($) =>
+      binary($, $._subject_rest, $._subject_rest),
+
+    _subject_unary_expression: ($) => unary($._subject_rest),
+
+    _subject_call_expression: ($) => call($, $._subject),
+
+    _subject_rest_call_expression: ($) => call($, $._subject_rest),
+
+    _subject_field_expression: ($) => fieldAccess($, $._subject),
+
+    _subject_rest_field_expression: ($) => fieldAccess($, $._subject_rest),
 
     // `io::println`, `board::Won`, `Show::show`, `shape::Shape::area`,
     // `channel::new::<Int>`.
@@ -539,11 +611,17 @@ module.exports = grammar({
     // is a turbofish too.
     turbofish: ($) => seq("::", angleList($, $._type)),
 
+    // The precedence makes `Name {` a record wherever an unrestricted
+    // expression may end before a `case` body, as in `case panic as Name {`,
+    // since the compiler parser's `as` message takes any expression.
     record_expression: ($) =>
-      seq(
-        optional(seq(field("module", $._module), "::")),
-        field("name", alias($.type_identifier, $.constructor)),
-        braceList($, choice($.field_initializer, $.spread_element)),
+      prec(
+        1,
+        seq(
+          optional(seq(field("module", $._module), "::")),
+          field("name", alias($.type_identifier, $.constructor)),
+          braceList($, choice($.field_initializer, $.spread_element)),
+        ),
       ),
 
     field_initializer: ($) =>
@@ -574,8 +652,8 @@ module.exports = grammar({
       choice(
         seq(
           "case",
-          field("subject", $._expression),
-          repeat(seq(cont($, ","), field("subject", $._expression))),
+          field("subject", $._subject),
+          repeat(seq(cont($, ","), field("subject", $._subject))),
           field("body", $.case_body),
         ),
         seq("case", field("body", $.condition_body)),
