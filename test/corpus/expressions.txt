@@ -345,3 +345,43 @@ fn f() {
               (binary_expression
                 (identifier)
                 (identifier)))))))))
+
+================================================================================
+Guard statements
+================================================================================
+
+fn f() {
+  guard n > 0 else {
+    0
+  }
+  let guard Some(x): Option<Int> = g() else {}
+  x
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (guard_statement
+        (binary_expression
+          (identifier)
+          (integer))
+        (block
+          (integer)))
+      (let_guard_statement
+        (constructor_pattern
+          (constructor)
+          (identifier))
+        (named_type
+          (type_identifier)
+          (type_arguments
+            (named_type
+              (type_identifier))))
+        (call_expression
+          (identifier)
+          (arguments))
+        (block))
+      (identifier))))

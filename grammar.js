@@ -249,8 +249,10 @@ module.exports = grammar({
       "case",
       "const",
       "dyn",
+      "else",
       "exposed",
       "fn",
+      "guard",
       "import",
       "interface",
       "let",
@@ -472,6 +474,8 @@ module.exports = grammar({
         $.let_statement,
         $.use_statement,
         $.assert_statement,
+        $.guard_statement,
+        $.let_guard_statement,
         $.function_declaration,
         $._expression,
       ),
@@ -506,6 +510,26 @@ module.exports = grammar({
         "assert",
         field("condition", $._expression),
         optional(seq("as", field("message", $._expression))),
+      ),
+
+    guard_statement: ($) =>
+      seq(
+        "guard",
+        field("condition", $._expression),
+        "else",
+        field("alternative", $.block),
+      ),
+
+    let_guard_statement: ($) =>
+      seq(
+        "let",
+        "guard",
+        field("pattern", $._pattern),
+        optional(seq(":", field("type", $._type))),
+        cont($, "="),
+        field("value", $._expression),
+        "else",
+        field("alternative", $.block),
       ),
 
     // ---------------------------------------------------------------------
