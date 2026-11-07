@@ -116,6 +116,8 @@
 
 [
   "case"
+  "else"
+  "guard"
   "when"
 ] @keyword.conditional
 
