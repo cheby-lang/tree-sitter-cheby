@@ -199,6 +199,41 @@ fn f() {
             (integer)))))))
 
 ================================================================================
+Field paths in a record update
+================================================================================
+
+fn f() {
+  let g = Game { ..game, player.position.x: 1, player.moves, turn: 2 }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameters)
+    (block
+      (let_statement
+        (identifier)
+        (record_expression
+          (constructor)
+          (spread_element
+            (identifier))
+          (field_initializer
+            (field_path
+              (identifier)
+              (identifier)
+              (identifier))
+            (integer))
+          (field_initializer
+            (field_path
+              (identifier)
+              (identifier)))
+          (field_initializer
+            (identifier)
+            (integer)))))))
+
+================================================================================
 Parenthesized and nested subjects
 ================================================================================
 

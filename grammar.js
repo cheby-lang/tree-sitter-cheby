@@ -648,11 +648,15 @@ module.exports = grammar({
         ),
       ),
 
+    // A field path `origin.y` updates a field inside a field. Only a
+    // record update takes one, which the compiler checks (D-1638, D-1643).
     field_initializer: ($) =>
       seq(
-        field("name", $.identifier),
+        choice(field("name", $.identifier), field("path", $.field_path)),
         optional(seq(":", field("value", $._expression))),
       ),
+
+    field_path: ($) => seq($.identifier, repeat1(seq(".", $.identifier))),
 
     spread_element: ($) => seq("..", $._expression),
 
