@@ -42,6 +42,9 @@
 (field_initializer
   name: (identifier) @property)
 
+(field_path
+  (identifier) @property)
+
 (field_pattern
   name: (identifier) @property)
 
